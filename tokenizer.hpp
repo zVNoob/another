@@ -7,6 +7,7 @@
 #include "error.hpp"
 
 struct Tokenizer {
+	//ErrorList Err;
 	unsigned char Get_Priorty(char Op) {
 		switch(Op) {
 			case '*':case '/':case '%': 		return 5;
@@ -107,12 +108,11 @@ struct Tokenizer {
 				while (!OpStack.empty()) {
 						if (Get_Priorty(OpStack.top()->Value.str[0])
 						  < Get_Priorty(Input.str[0])) break;
-						if (Result->ChildEnd == 0) break;
 						*OpStack.top() <
-							Result->ChildEnd->detach();
-						if (Result->ChildEnd)
+							OpStack.top()->Next->detach();
+						if (OpStack.top()->Prev)
 							*OpStack.top() <
-								Result->ChildEnd->detach();
+								OpStack.top()->Prev->detach();
 						*OpStack.top() <
 							OpStack.top()->ChildBegin->detach(); //Swap
 						*Result << OpStack.top()->detach();
@@ -139,19 +139,21 @@ struct Tokenizer {
 		}
 		*Result << _Identifier(Input,Identifier);
 		//Insert remaining operator
-		while (!OpStack.empty())
-   		{
-   			if (Result->ChildEnd == 0) break;
-   			*OpStack.top() < 
-   				Result->ChildEnd->detach();
-   			if (Result->ChildEnd->Prev)
+   		while (!OpStack.empty()) {
+   			if (Get_Priorty(OpStack.top()->Value.str[0])
+   			  < Get_Priorty(Input.str[0])) break;
+   			if (OpStack.top()->Next == 0) // TODO: Create error
    				*OpStack.top() <
-   					Result->ChildEnd->Prev->detach();
+   					OpStack.top()->Next->detach();
+   			if (OpStack.top()->Prev)
+   				*OpStack.top() <
+   					OpStack.top()->Prev->detach();
    			*OpStack.top() <
-   				OpStack.top()->ChildBegin->detach();
+   				OpStack.top()->ChildBegin->detach(); //Swap
    			*Result << OpStack.top()->detach();
    			OpStack.pop();
-		}
+   		}
+
 		return Result;
 	}
 	Token* _In_Bracket(Str& Input,

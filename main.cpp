@@ -85,13 +85,9 @@ int main()
 	string s;
 	getline(std::cin,s);
 	Token* Res;
-	try {
-		Res = Tokenizer()
+	Res = Tokenizer()
 			(Str(const_cast<char*>(s.c_str()),s.size()));
-	}
-	catch (Error e) {
 
-	}
 	cout << *Res;
 	return 0;
 }
