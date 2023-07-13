@@ -19,7 +19,7 @@ ostream& operator<<(ostream& os,Str& inp) {
 	return os;
 }
 
-Token* Err_Token = 0;
+Error* Err = 0;
 
 ostream& operator<<(ostream& os,Token& T) //AST pretty printer
 {
@@ -39,14 +39,18 @@ ostream& operator<<(ostream& os,Token& T) //AST pretty printer
 	};
 	const string tree = "150;150;150";
 	static list<bool> depth;
-	if (&T == Err_Token) {
+	bool Error = false;
+	if (Err) if (&T == Err->Where) Error = true;
+	if (Error) {
 		os << "\x1b[38;2;255;50;50m" 
-			<< (int)T.Type << ":\"" << T.Value << "\"";
+			<< (int)T.Type << ":\"" << T.Value << "\""
+			<< "\x1b[38;2;255;100;100m // " << Err->What;
+		Err = Err->Next;
 	}
 	else {
-	os << "\x1b[38;2;" << norm << 'm' << (int)T.Type << ":\"";
-	os << "\x1b[38;2;" << table[T.Type] << "m" << T.Value;
-	os << "\x1b[38;2;" << norm << "m\"";
+		os << "\x1b[38;2;" << norm << 'm' << (int)T.Type << ":\"";
+		os << "\x1b[38;2;" << table[T.Type] << "m" << T.Value;
+		os << "\x1b[38;2;" << norm << "m\"";
 	}
 	if (T.ChildBegin) depth.push_back(1);
 	if (T.PreExec)
@@ -85,9 +89,9 @@ int main()
 	string s;
 	getline(std::cin,s);
 	Token* Res;
-	Res = Tokenizer()
-			(Str(const_cast<char*>(s.c_str()),s.size()));
-
+	Tokenizer tokenizer;
+	Res = tokenizer(Str(const_cast<char*>(s.c_str()),s.size()));
+	Err = tokenizer.Err.First;
 	cout << *Res;
 	return 0;
 }

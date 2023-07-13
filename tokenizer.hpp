@@ -7,7 +7,7 @@
 #include "error.hpp"
 
 struct Tokenizer {
-	//ErrorList Err;
+	ErrorList Err;
 	unsigned char Get_Priorty(char Op) {
 		switch(Op) {
 			case '*':case '/':case '%': 		return 5;
@@ -108,6 +108,12 @@ struct Tokenizer {
 				while (!OpStack.empty()) {
 						if (Get_Priorty(OpStack.top()->Value.str[0])
 						  < Get_Priorty(Input.str[0])) break;
+						if (OpStack.top()->Next == 0) {
+							Err.Add(new Error(OpStack.top(),
+									(char*)"Expected operand"));
+							OpStack.pop();
+							continue;
+						}
 						*OpStack.top() <
 							OpStack.top()->Next->detach();
 						if (OpStack.top()->Prev)
@@ -142,7 +148,12 @@ struct Tokenizer {
    		while (!OpStack.empty()) {
    			if (Get_Priorty(OpStack.top()->Value.str[0])
    			  < Get_Priorty(Input.str[0])) break;
-   			if (OpStack.top()->Next == 0) // TODO: Create error
+   			if (OpStack.top()->Next == 0) {
+   				Err.Add(new Error(OpStack.top(),
+   						(char*)"Expected operand"));
+   				OpStack.pop();
+   				continue;
+   			} // TODO: Create error
    				*OpStack.top() <
    					OpStack.top()->Next->detach();
    			if (OpStack.top()->Prev)
