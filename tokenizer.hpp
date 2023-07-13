@@ -107,16 +107,14 @@ struct Tokenizer {
 				while (!OpStack.empty()) {
 						if (Get_Priorty(OpStack.top()->Value.str[0])
 						  < Get_Priorty(Input.str[0])) break;
-						if (Result->ChildEnd == 0)
-							throw Error(OpStack.top(),
-								(char*)"Expected operand");
+						if (Result->ChildEnd == 0) break;
 						*OpStack.top() <
 							Result->ChildEnd->detach();
 						if (Result->ChildEnd)
 							*OpStack.top() <
 								Result->ChildEnd->detach();
 						*OpStack.top() <
-							OpStack.top()->ChildBegin->detach();
+							OpStack.top()->ChildBegin->detach(); //Swap
 						*Result << OpStack.top()->detach();
 						OpStack.pop();
 					}
@@ -143,9 +141,7 @@ struct Tokenizer {
 		//Insert remaining operator
 		while (!OpStack.empty())
    		{
-   			if (Result->ChildEnd == 0)
-   				throw Error(OpStack.top(),
-   					(char*)"Expected operand");
+   			if (Result->ChildEnd == 0) break;
    			*OpStack.top() < 
    				Result->ChildEnd->detach();
    			if (Result->ChildEnd->Prev)

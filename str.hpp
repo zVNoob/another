@@ -3,6 +3,7 @@
 struct Str {
 	char* str;
 	int len;
+	Str(char* str,int len) : str(str),len(len){}
 	void operator<<(int i) {
 		len -= i;
 		if (len<1) len = 0;
