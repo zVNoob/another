@@ -10,10 +10,11 @@ struct Tokenizer {
 	ErrorList Err;
 	unsigned char Get_Priorty(char Op) {
 		switch(Op) {
+			case '!': 							return 6;// ???
 			case '*':case '/':case '%': 		return 5;
 			case '+':case '-': 					return 4;
 			case '<':case '>':case '~': 		return 3;
-			case '!':case '|':case '&':case '^':return 2;
+			case '|':case '&':case '^': 		return 2;
 			case ':':case '=': 					return 1;
 			default: 							return 0;
 		}
@@ -44,7 +45,6 @@ struct Tokenizer {
 	}
 
 	Token* _String(Str& Input) {
-		Input >> 1;
 		Token* Result = new Token(Input,5);
 		while (Input.len) {
 			if (Input.str[0] == '"') break;
@@ -59,20 +59,18 @@ struct Tokenizer {
 		Token* Result = new Token(Input,1); // a.k.a Node stack
 		Token* Identifier = 0; // make it a int first
 		std::stack<Token*> OpStack;
+		bool HasError = false;
 		while (Input.len) {
 			switch(Input.str[0]) {
-				case ';':case ',':
-				Input >> 1;
-				return Result;
-
-				case '}':case ']':case ')':
-				return Result;
+				case ';':case ',':case '}':case ']':case ')':
+				goto _Expression_EndPoint;
 				
 				case '(':
 				*Result << _Identifier(Input,Identifier);
+				Input >> 1;
 				if (Result->ChildEnd)
 					if (Result->ChildEnd->Type!=6) {
-						*Result << _In_Bracket(Input, ')',1);
+						*Result << _In_Bracket(Input, ')',2);
 						break;
 					}
 				*Result < _Expression(Input);
@@ -80,6 +78,7 @@ struct Tokenizer {
 
 				case '[':
 				*Result << _Identifier(Input,Identifier);
+				Input >> 1;
 				if (Result->ChildEnd)
 					if (Result->ChildEnd->Type!=6) {
 						*Result << _In_Bracket(Input, ']',4);
@@ -89,10 +88,12 @@ struct Tokenizer {
 				break;
 				
 				case '{':
+				Input >> 1;
 				*Result << _In_Bracket(Input,'}',0);
 				break;
 
 				case '"':
+				Input >> 1;
 				*Result << _String(Input);
 				break;
 
@@ -105,27 +106,27 @@ struct Tokenizer {
 				case '<':case '>':case '~':
 				case '!':case '|':case '&':case '^':
 				case ':':case '=':
+				*Result << _Identifier(Input,Identifier);
 				while (!OpStack.empty()) {
 						if (Get_Priorty(OpStack.top()->Value.str[0])
 						  < Get_Priorty(Input.str[0])) break;
-						if (OpStack.top()->Next == 0) {
-							Err.Add(new Error(OpStack.top(),
-									(char*)"Expected operand"));
-							OpStack.pop();
-							continue;
-						}
+						if (OpStack.top()->Next == 0) break;
 						*OpStack.top() <
 							OpStack.top()->Next->detach();
-						if (OpStack.top()->Prev)
-							*OpStack.top() <
-								OpStack.top()->Prev->detach();
+						if (OpStack.top()->Prev) {
+							if (OpStack.top()->Prev->Type!=6)
+								*OpStack.top() <
+									OpStack.top()->Prev->detach();
+							else if (OpStack.top()->Prev->ChildEnd)
+								*OpStack.top() <
+									OpStack.top()->Prev->detach();
+						}
 						*OpStack.top() <
 							OpStack.top()->ChildBegin->detach(); //Swap
 						*Result << OpStack.top()->detach();
 						OpStack.pop();
 					}
 				OpStack.push(new Token(Str(Input.str,1),6));
-				*Result << _Identifier(Input,Identifier);
 				*Result << OpStack.top(); //Insert placeholder
 				break;
 
@@ -143,28 +144,42 @@ struct Tokenizer {
 			}
 			Input >> 1;
 		}
-		*Result << _Identifier(Input,Identifier);
+		_Expression_EndPoint:
+		*Result << _Identifier(Input,Identifier); // Add final ID
+		Result->Value.len = Input.str - Result->Value.str;
+		if (Input.str[0]==';' || Input.str[0]==',')
+			Input >> 1; // Small hack
 		//Insert remaining operator
    		while (!OpStack.empty()) {
-   			if (Get_Priorty(OpStack.top()->Value.str[0])
-   			  < Get_Priorty(Input.str[0])) break;
    			if (OpStack.top()->Next == 0) {
    				Err.Add(new Error(OpStack.top(),
    						(char*)"Expected operand"));
    				OpStack.pop();
+   				HasError = true;
    				continue;
-   			} // TODO: Create error
-   				*OpStack.top() <
-   					OpStack.top()->Next->detach();
-   			if (OpStack.top()->Prev)
-   				*OpStack.top() <
-   					OpStack.top()->Prev->detach();
+   			}
+   			*OpStack.top() <
+   				OpStack.top()->Next->detach();
+   			if (OpStack.top()->Prev) {
+   				if (OpStack.top()->Prev->Type!=6)
+   					*OpStack.top() <
+   						OpStack.top()->Prev->detach();
+   				else if (OpStack.top()->Prev->ChildEnd)
+   					*OpStack.top() <
+   						OpStack.top()->Prev->detach();
+   			}
    			*OpStack.top() <
    				OpStack.top()->ChildBegin->detach(); //Swap
    			*Result << OpStack.top()->detach();
    			OpStack.pop();
    		}
-
+		//Optimise output if no error is found
+		if (HasError == false) {
+			Token* NewRes = Result->ChildBegin;
+			if (NewRes) NewRes->detach();
+			delete Result;
+			Result = NewRes;
+		}
 		return Result;
 	}
 	Token* _In_Bracket(Str& Input,
@@ -175,7 +190,11 @@ struct Tokenizer {
 		while (Input.len) {
 			*Result < _Expression(Input);
 			if (Input.str[0] == EndChar) break;
-			if (Input.str == OldPos) break; //corrupted input
+			if (Input.str == OldPos) { // corrupted input
+				Err.Add(new Error(Result->ChildEnd,
+						(char*)"Undefined syntax"));
+				break;
+			}
 			OldPos = Input.str;
 		}
 		Result->Value.len = Input.str - Result->Value.str;

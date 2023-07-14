@@ -19,8 +19,10 @@ struct ErrorList {
 			First = Inp;
 			Last = Inp;
 		}
-		if (Inp->Where == Last->Where) 
+		else if (Inp->Where == Last->Where) {
 			Last->What = Inp->What;
+			delete Inp;
+			}
 		else {
 			Inp->Prev = Last;
 			Last->Next = Inp;
@@ -28,9 +30,9 @@ struct ErrorList {
 		}
 	};
 	~ErrorList() {
-		while (Last) {
-			Error* temp = Last;
-			Last = Last->Prev;
+		while (First) {
+			Error* temp = First;
+			First = First->Next;
 			delete temp;
 		}
 	}

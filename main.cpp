@@ -27,6 +27,7 @@ ostream& operator<<(ostream& os,Token& T) //AST pretty printer
 	const string table[10] = 
 	{
 		"255;127;50",
+		"255;100;50",
 		"255;255;50",
 		"127;255;50",
 		"50;255;50",
@@ -35,7 +36,6 @@ ostream& operator<<(ostream& os,Token& T) //AST pretty printer
 		"200;127;255",
 		"100;100;255",
 		"127;50;255",
-		"255;50;255",	
 	};
 	const string tree = "150;150;150";
 	static list<bool> depth;
