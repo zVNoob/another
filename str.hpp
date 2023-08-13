@@ -1,9 +1,11 @@
 #pragma once
 
+#include <cstring>
 struct Str {
 	char *str;
-	unsigned long len;
+	long len;
 	Str(char *str, unsigned long len) : str(str), len(len) {}
+	Str(const char *str, unsigned long len) : str(const_cast<char *>(str)), len(len) {}
 	void operator<<(int i) {
 		len -= i;
 		if (len < 1)
@@ -15,8 +17,13 @@ struct Str {
 		if (len < 1)
 			len = 0;
 	}
+	Str clone() {
+		char *new_str = new char[len];
+		memcpy(new_str, str, len);
+		return Str(new_str, len);
+	}
 	struct STD_Str_LESS {
-		bool operator()(Str a, Str b) {
+		bool operator()(const Str &a, const Str &b) const {
 			int c = (a.len < b.len) ? a.len : b.len;
 			for (int i = 1; i < c; i++) {
 				if (a.str[i] != b.str[i])

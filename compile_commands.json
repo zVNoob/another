@@ -1,0 +1,14 @@
+[
+  {
+    "arguments": [
+      "/usr/bin/g++",
+      "-c",
+      "-o",
+      "main",
+      "main.cpp"
+    ],
+    "directory": "/home/may/another",
+    "file": "/home/may/another/main.cpp",
+    "output": "/home/may/another/main"
+  }
+]
