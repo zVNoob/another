@@ -14,8 +14,10 @@ static Object_Function *_0(Token *Input, Object_Env &Env) {
 
 static Object *_7(Token *Input, Object_Env &Env) {
 	Object *CurEnv = &Env;
-	if (Input->PreExec)
+	if (Input->PreExec) {
 		CurEnv = Execute(Input->PreExec, Env);
+		Env.This = CurEnv;
+	}
 	if (CurEnv == 0)
 		throw Error(Input, (char *)"Cannot access null member");
 	Object *Result = CurEnv->Child[Input->Value];
@@ -28,6 +30,7 @@ static Object *_7(Token *Input, Object_Env &Env) {
 		Result = Result->clone();
 		delete CurEnv;
 	}
+
 	return Result;
 }
 
@@ -133,6 +136,28 @@ static Object *_6(Token *Input, Object_Env &Env) {
 		if (Input->ChildBegin == Input->ChildEnd)
 			throw Error(Input, (char *)"Missing variable name");
 		Env.AddChild(Input->ChildBegin->Value, Execute(Input->ChildEnd, Env));
+		return 0;
+	}
+	if (Input->Value.str[0] == '=') {
+		Object *Assigner = Execute(Input->ChildBegin, Env);
+		if (Assigner == 0)
+			throw Error(Input, (char *)"Cannot assign to null");
+		if (Assigner->Deletable) {
+			throw Assigner;
+			throw Error(Input, (char *)"Cannot assign to constant");
+		}
+		Object *Result = 0;
+		try {
+			Result = Execute(Input->ChildEnd, Env);
+			if (Result == 0)
+				throw Error(Input, (char *)"Cannot assign null");
+			Assigner->OnAssign(*Result, Env);
+		} catch (...) {
+			if (Result)
+				if (Result->Deletable)
+					delete Result;
+			throw;
+		}
 		return 0;
 	}
 	Object *Callee = Env.Shared->Child[Input->Value];

@@ -1,13 +1,22 @@
+// STL
+#include <iostream>
+#include <list>
+
+// Base type
 #include "error.hpp"
+#include "object_operator.hpp"
+#include "str.hpp"
+#include "token.hpp"
+
+// Parser
+#include "parser.hpp"
+
+// Executer
 #include "executer.hpp"
 #include "object.hpp"
 #include "object_function.hpp"
-#include "parser.hpp"
-#include "str.hpp"
-#include "token.hpp"
-#include <cstring>
-#include <iostream>
-#include <list>
+
+// Core library
 
 using namespace std;
 
@@ -91,68 +100,12 @@ ostream &operator<<(ostream &os, Token &T) // AST pretty printer
 	return os;
 }
 
-Object *Internal_Print(Object_Array &Args, Object_Env &Env) {
-	for (auto &i : Args.Value)
-		switch (i->Type) {
-		case 1:
-			cout << static_cast<Object_Decimal *>(i)->Value;
-			break;
-		case 2:
-			cout << static_cast<Object_Int *>(i)->Value;
-			break;
-		case 4:
-			for (int in = 0; in < static_cast<Object_String *>(i)->Value.len; in++)
-				cout << static_cast<Object_String *>(i)->Value.str[in];
-			break;
-		default:
-			throw (char *)"Unwriteable";
-		}
-	return 0;
-}
+#include "corelib_core.hpp"
+#include "corelib_env.hpp"
 
-Object *Internal_Args(Object_Array &Args, Object_Env &Env) {
-	return Env.Args;
-}
-
-Object *Internal_If(Object_Array &Args, Object_Env &Env) {
-	if (Args.Value[1]->Type == 1)
-		throw "Missing return value";
-	Object *Cond = Args.Value[0];
-	Object *Then = Args.Value[1];
-	Object *Else = 0;
-	if (Args.Value.size() > 2)
-		Else = Args.Value[2];
-
-	Object *RealCond = Cond->OnCast(2, Env);
-	Object *Result;
-	if (static_cast<Object_Int *>(RealCond)->Value)
-		Result = Then;
-	else
-		Result = Else;
-	if (RealCond->Deletable)
-		delete RealCond;
-	return Result->clone();
-}
-
-Object *Internal_Int(Object_Array &Args, Object_Env &Env) {
-	if (Args.Value.size() == 0)
-		throw "Missing argument";
-	Object *Input = Args.Value[0];
-	if (Input->Type == 4) {
-		Object_String *Temp = static_cast<Object_String *>(Input);
-		string Str(Temp->Value.str, Temp->Value.len);
-		return new Object_Int(stoi(Str));
-	}
-	Object *Result = Input->OnCast(2, Env);
-	if (Result != Input)
-		return Result;
-	return Result->clone();
-}
-
-Object *Internal_Input(Object_Array &Args, Object_Env &Env) {
-	std::string s;
-	getline(std::cin, s);
-	return new Object_String(Str(s.c_str(), s.size()));
+inline void Register_All(Object &Shared) {
+	corelib::Register_Core(Shared);
+	corelib::Register_Env(Shared);
 }
 
 int main() {
@@ -169,20 +122,19 @@ int main() {
 	}
 	// Env setup
 	Object_Env Env;
+	Env.Deletable = false;
 	Object Shared;
 	Env.Shared = &Shared;
 	Shared.Deletable = false;
 	Object_Array Args;
 	Args.Deletable = false;
 	Env.Args = &Args;
-	// Shared setup
-	Shared.AddChild(Str("print", 5), new Object_Internal_Function(Internal_Print));
-	Shared.AddChild(Str("args", 4), new Object_Internal_Function(Internal_Args));
-	Shared.AddChild(Str("if", 2), new Object_Internal_Function(Internal_If));
-	Shared.AddChild(Str("int", 3), new Object_Internal_Function(Internal_Int));
-	Shared.AddChild(Str("input", 5), new Object_Internal_Function(Internal_Input));
+	Register_Operators(Shared);
+	Register_All(Shared);
 	// Execution
 	Object *EntryPoint = Execute(Res, Env);
+	EntryPoint->Deletable = false;
+	Env.Self = EntryPoint;
 	try {
 		Object *Result = EntryPoint->OnCall(Args, Env);
 		if (Result)

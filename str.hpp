@@ -6,6 +6,7 @@ struct Str {
 	long len;
 	Str(char *str, unsigned long len) : str(str), len(len) {}
 	Str(const char *str, unsigned long len) : str(const_cast<char *>(str)), len(len) {}
+	Str(const char *str) : str(const_cast<char *>(str)), len(strlen(str)) {}
 	void operator<<(int i) {
 		len -= i;
 		if (len < 1)
@@ -25,7 +26,7 @@ struct Str {
 	struct STD_Str_LESS {
 		bool operator()(const Str &a, const Str &b) const {
 			int c = (a.len < b.len) ? a.len : b.len;
-			for (int i = 1; i < c; i++) {
+			for (int i = 0; i < c; i++) {
 				if (a.str[i] != b.str[i])
 					return a.str[i] < b.str[i];
 			}
