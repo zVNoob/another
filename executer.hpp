@@ -164,9 +164,17 @@ static Object *_6(Token *Input, Object_Env &Env) {
 	if (Callee == 0)
 		throw Error(Input, (char *)"Undefined operator");
 	Object_Array *Args = _3(Input, Env);
-	Object *Result = Callee->OnCall(*Args, Env);
-	delete Args;
-	return Result;
+	try {
+		Object *Result = Callee->OnCall(*Args, Env);
+		delete Args;
+		return Result;
+	} catch (const char *e) {
+		delete Args;
+		throw Error(Input, e);
+	} catch (...) {
+		delete Args;
+		throw;
+	}
 }
 
 static Object *_8_9(Token *Input, Object_Env &Env) {

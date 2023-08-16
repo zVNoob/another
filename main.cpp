@@ -108,6 +108,31 @@ inline void Register_All(Object &Shared) {
 	corelib::Register_Env(Shared);
 }
 
+void Print_Thrown(Object *Thrown) {
+	if (dynamic_cast<Object_Int *>(Thrown)) {
+		cout << "(int) " << static_cast<Object_Int *>(Thrown)->Value;
+		return;
+	}
+	if (dynamic_cast<Object_Decimal *>(Thrown)) {
+		cout << "(decimal) " << static_cast<Object_Decimal *>(Thrown)->Value;
+		return;
+	}
+	if (dynamic_cast<Object_String *>(Thrown)) {
+		cout << "(string) \"" << static_cast<Object_String *>(Thrown)->Value << "\"";
+		return;
+	}
+	if (dynamic_cast<Object_Array *>(Thrown)) {
+		cout << "(array) [";
+		for (auto &i : static_cast<Object_Array *>(Thrown)->Value) {
+			Print_Thrown(i);
+			cout << ", ";
+		}
+		cout << "]";
+		return;
+	}
+	cout << "(unknown)";
+}
+
 int main() {
 	string s;
 	getline(std::cin, s);
@@ -145,6 +170,12 @@ int main() {
 		Err = &e;
 		delete EntryPoint;
 		cout << *Res;
+	} catch (Object *e) {
+		delete EntryPoint;
+		cout << "Terminated after throwing: ";
+		Print_Thrown(e);
+		cout << '\n';
+		delete e;
 	}
 	return 0;
 }

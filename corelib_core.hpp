@@ -26,29 +26,6 @@ static Object *If(Object_Array &Args, Object_Env &Env) {
 	return Else->clone();
 }
 
-static Object *Filter(Object_Array &Args, Object_Env &Env) {
-	if (Args.Value.size() < 2)
-		throw "Missing argument";
-	Object_Array *Input = dynamic_cast<Object_Array *>(Args.Value[0]);
-	if (Input == 0)
-		throw "Type mismatch";
-	Object_Array *Output = new Object_Array();
-	for (auto &i : Input->Value) {
-		Object_Array *Filter_Args = new Object_Array();
-		Filter_Args->AddValue(i);
-		try {
-			Object *Result = Args.Value[1]->OnCall(*Filter_Args, Env);
-			Output->AddValue(Result);
-		} catch (...) {
-			delete Output;
-			delete Filter_Args;
-			throw;
-		}
-		delete Filter_Args;
-	}
-	return Output;
-}
-
 static Object *While(Object_Array &Args, Object_Env &Env) {
 	if (Args.Value.size() < 2)
 		throw "Missing argument";
@@ -105,7 +82,6 @@ static Object *Try(Object_Array &Args, Object_Env &Env) {
 #include "object_function.hpp"
 static void Register_Core(Object &Shared) {
 	Shared.AddChild(Str("if"), new Object_Internal_Function(If));
-	Shared.AddChild(Str("filter"), new Object_Internal_Function(Filter));
 	Shared.AddChild(Str("while"), new Object_Internal_Function(While));
 	Shared.AddChild(Str("throw"), new Object_Internal_Function(Throw));
 	Shared.AddChild(Str("try"), new Object_Internal_Function(Try));
