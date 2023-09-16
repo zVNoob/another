@@ -12,12 +12,15 @@ class Object_Array;
 class Object { // Type = 0, unusable
   public:
 	std::map<Str, Object *, Str::STD_Str_LESS> Child;
-	bool Deletable = true; // false if managed by other objects
+	// GC
+	bool Deletable = true;
+	Object *_Next = 0;
+	Object *_Prev = 0;
 	virtual Object *clone() {
 		throw (char *)"Undefined implementation";
 	};
 	virtual Object *OnCall(Object_Array &Args, Object_Env &Env) {
-		return clone();
+		throw (char *)"Undefined implementation";
 	}
 	virtual Object *OnIndex(Object_Array &Args, Object_Env &Env) {
 		throw (char *)"Undefined implementation";
@@ -30,8 +33,18 @@ class Object { // Type = 0, unusable
 			if (i.second)
 				delete i.second;
 	}
-	void AddChild(Str Key, Object *Value) {
+
+	inline void AddChild(Str Key, Object *Value) {
 		if (Value) {
+			auto Temp = Child.find(Key);
+			if (Temp != Child.end())
+				delete Temp->second;
+			if (Value->_Prev)
+				Value->_Prev->_Next = Value->_Next;
+			if (Value->_Next)
+				Value->_Next->_Prev = Value->_Prev;
+			Value->_Prev = 0;
+			Value->_Next = 0;
 			Value->Deletable = false;
 			Child[Key] = Value;
 		}
@@ -66,15 +79,29 @@ class Object_Decimal : public Object { // Type = 1
 	}
 };
 
+class Object_Internal_Function : public Object {
+  public:
+	Object *(*Function)(Object_Array &Args, Object_Env &Env);
+	Object_Internal_Function(Object *(*Function)(Object_Array &Args, Object_Env &Env)) {
+		this->Function = Function;
+	}
+	Object *OnCall(Object_Array &Args, Object_Env &Env) override {
+		return Function(Args, Env);
+	}
+	Object *clone() override {
+		return new Object_Internal_Function(Function);
+	}
+};
+
 class Object_Array : public Object { // Type = 3
   public:
 	std::vector<Object *> Value;
-	Object_Array() {}
+	Object_Array() {
+	}
 	Object *clone() override {
 		Object_Array *Result = new Object_Array();
 		for (auto &i : Value) {
 			Object *Temp = i->clone();
-			Temp->Deletable = false;
 			Result->Value.push_back(Temp);
 		}
 		return Result;
@@ -84,12 +111,7 @@ class Object_Array : public Object { // Type = 3
 			throw (char *)"Type mismatch";
 		Object_Array *T = static_cast<Object_Array *>(&Args);
 		for (auto &i : T->Value) {
-			Object *Temp = i;
-			if (Temp) {
-				Temp = Temp->clone();
-				Temp->Deletable = false;
-			}
-			Value.push_back(Temp);
+			Value.push_back(i->clone());
 		}
 	}
 	Object *OnIndex(Object_Array &Args, Object_Env &Env) override {
@@ -109,8 +131,14 @@ class Object_Array : public Object { // Type = 3
 	}
 	void AddValue(Object *Value) {
 		if (Value) {
-			if (Value->Deletable == false)
+			if (Value->_Prev)
+				Value->_Prev->_Next = Value->_Next;
+			if (Value->_Next)
+				Value->_Next->_Prev = Value->_Prev;
+			if (Value->Deletable == 0)
 				Value = Value->clone();
+			Value->_Prev = 0;
+			Value->_Next = 0;
 			Value->Deletable = false;
 			this->Value.push_back(Value);
 		}
@@ -153,9 +181,30 @@ class Object_Env : public Object { // Type = 5
 	Object_Env *Prev;
 	Object_Env *Global;
 	Object *Shared;
-	Object *This;
-	Object_Array *Args;
-	Object *Self;
+	// Context
+	Object *This;		// OOP object
+	Object_Array *Args; // Function arguments
+	Object *Self;		// Self callee (for recursive lambda)
+	// GC-related
+	Object *Floating_Object = 0;
+	inline Object *Register_AutoFree(Object *Object) {
+		if (Object)
+			if (Object->Deletable) {
+				Object->_Next = Floating_Object;
+				if (Floating_Object)
+					Floating_Object->_Prev = Object;
+				Floating_Object = Object;
+				return Object;
+			}
+		return Object;
+	}
+	inline void AutoFree() {
+		while (Floating_Object) {
+			Object *Temp = Floating_Object;
+			Floating_Object = Floating_Object->_Next;
+			delete Temp;
+		}
+	}
 	Object_Env() {
 		Args = 0;
 		This = 0;
@@ -163,6 +212,11 @@ class Object_Env : public Object { // Type = 5
 		Global = 0;
 		Shared = 0;
 		Self = 0;
+		Floating_Object = 0;
+		Deletable = false;
+	}
+	~Object_Env() {
+		AutoFree();
 	}
 	Object_Env(Object_Env *Prev) : Object_Env() {
 		this->Prev = Prev;
@@ -172,15 +226,5 @@ class Object_Env : public Object { // Type = 5
 			Global = this;
 		Shared = Prev->Shared;
 		This = Prev->This;
-	}
-	Object *clone() override {
-		Object_Env *Result = new Object_Env();
-		Result->Prev = Prev;
-		Result->Global = Global;
-		Result->Shared = Shared;
-		Result->This = This;
-		Result->Args = Args;
-		Result->Child = Child;
-		return Result;
 	}
 };

@@ -19,9 +19,12 @@ struct Str {
 			len = 0;
 	}
 	Str clone() {
-		char *new_str = new char[len];
-		memcpy(new_str, str, len);
-		return Str(new_str, len);
+		if (len) {
+			char *new_str = new char[len];
+			memcpy(new_str, str, len);
+			return Str(new_str, len);
+		} else
+			return Str((char *)0, 0);
 	}
 	struct STD_Str_LESS {
 		bool operator()(const Str &a, const Str &b) const {

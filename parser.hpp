@@ -177,9 +177,10 @@ class Parser {
 	_Expression_EndPoint:
 		*Result << _Identifier(Input, Identifier); // Add final ID
 		Result->Value.len = Input.str - Result->Value.str;
-		if (Input.str[0] == ';' || Input.str[0] == ',')
-			Input >> 1; // Small hack
-						// Insert remaining operator
+		if (Input.len)
+			if (Input.str[0] == ';' || Input.str[0] == ',')
+				Input >> 1; // Small hack
+							// Insert remaining operator
 		while (!OpStack.empty()) {
 			if (OpStack.top()->Next == 0) {
 				Err.Add(new Error(OpStack.top(), (char *)"Expected operand"));
@@ -213,12 +214,14 @@ class Parser {
 		char *OldPos = Input.str;
 		while (Input.len) {
 			*Result < _Expression(Input);
-			if (Input.str[0] == EndChar)
-				break;
-			if (Input.str == OldPos) { // corrupted input
-				Err.Add(
-					new Error(Result->ChildEnd, (char *)"Undefined syntax"));
-				Input >> 1; // force skip
+			if (Input.len) {
+				if (Input.str[0] == EndChar)
+					break;
+				if (Input.str == OldPos) { // corrupted input
+					Err.Add(
+						new Error(Result->ChildEnd, (char *)"Undefined syntax"));
+					Input >> 1; // force skip
+				}
 			}
 			OldPos = Input.str;
 		}
@@ -246,12 +249,10 @@ class Parser {
 
   public:
 	Token *operator()(Str Input) {
-		auto s = Strip_Comment(Input);
-		Result = _In_Bracket(s, '}', 0);
+		Result = _In_Bracket(Input, '}', 0);
 		return Result;
 	}
 	~Parser() {
-		delete[] Result->Value.str;
 		delete Result;
 	}
 };

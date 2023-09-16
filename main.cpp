@@ -102,10 +102,15 @@ ostream &operator<<(ostream &os, Token &T) // AST pretty printer
 
 #include "corelib_core.hpp"
 #include "corelib_env.hpp"
-
+#include "corelib_io.hpp"
+#include "corelib_thread.hpp"
+#include "corelib_type.hpp"
 inline void Register_All(Object &Shared) {
 	corelib::Register_Core(Shared);
 	corelib::Register_Env(Shared);
+	corelib::Register_IO(Shared);
+	corelib::Register_Type(Shared);
+	corelib::Register_Thread(Shared);
 }
 
 void Print_Thrown(Object *Thrown) {
@@ -118,7 +123,10 @@ void Print_Thrown(Object *Thrown) {
 		return;
 	}
 	if (dynamic_cast<Object_String *>(Thrown)) {
-		cout << "(string) \"" << static_cast<Object_String *>(Thrown)->Value << "\"";
+		cout << "(string) \"";
+		for (int i = 0; i < static_cast<Object_String *>(Thrown)->Value.len; i++)
+			cout << static_cast<Object_String *>(Thrown)->Value.str[i];
+		cout << "\"";
 		return;
 	}
 	if (dynamic_cast<Object_Array *>(Thrown)) {
@@ -147,35 +155,30 @@ int main() {
 	}
 	// Env setup
 	Object_Env Env;
-	Env.Deletable = false;
 	Object Shared;
-	Env.Shared = &Shared;
 	Shared.Deletable = false;
+	Env.Shared = &Shared;
 	Object_Array Args;
 	Args.Deletable = false;
 	Env.Args = &Args;
 	Register_Operators(Shared);
 	Register_All(Shared);
 	// Execution
-	Object *EntryPoint = Execute(Res, Env);
-	EntryPoint->Deletable = false;
-	Env.Self = EntryPoint;
+	// get the entry point
+	Object *Entry_Point = Execute(Res, Env);
+
 	try {
-		Object *Result = EntryPoint->OnCall(Args, Env);
+		Object *Result = Entry_Point->OnCall(Args, Env);
 		if (Result)
 			if (Result->Deletable)
 				delete Result;
-		delete EntryPoint;
-	} catch (Error &e) {
-		Err = &e;
-		delete EntryPoint;
+	} catch (Object *Thrown) {
+		Print_Thrown(Thrown);
+		delete Thrown;
+	} catch (Error &Thrown) {
+		Err = &Thrown;
 		cout << *Res;
-	} catch (Object *e) {
-		delete EntryPoint;
-		cout << "Terminated after throwing: ";
-		Print_Thrown(e);
-		cout << '\n';
-		delete e;
 	}
+	delete Entry_Point;
 	return 0;
 }

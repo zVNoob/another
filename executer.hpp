@@ -1,8 +1,9 @@
 #pragma once
 
-#include "error.hpp"
 #include "object.hpp"
-#include <string>
+#include "token.hpp"
+
+#include "error.hpp"
 
 static Object *Execute(Token *Input, Object_Env &Env);
 
@@ -12,30 +13,22 @@ static Object_Function *_0(Token *Input, Object_Env &Env) {
 	return new Object_Function(Input);
 }
 
-static Object *_7(Token *Input, Object_Env &Env) {
-	Object *CurEnv = &Env;
-	if (Input->PreExec) {
-		CurEnv = Execute(Input->PreExec, Env);
-		Env.This = CurEnv;
-	}
-	if (CurEnv == 0)
-		throw Error(Input, (char *)"Cannot access null member");
-	Object *Result = CurEnv->Child[Input->Value];
-	if (Result == 0) {
-		if (CurEnv->Deletable)
-			delete CurEnv;
-		throw Error(Input, (char *)"Undefined identifier");
-	}
-	if (CurEnv->Deletable) {
-		Result = Result->clone();
-		delete CurEnv;
-	}
-
-	return Result;
-}
-
 static Object *_10(Token *Input, Object_Env &Env) {
 	return Env.Shared;
+}
+
+static Object *_7(Token *Input, Object_Env &Env) {
+	Object *NewEnv = &Env;
+	if (Input->PreExec) {
+		NewEnv = Env.Register_AutoFree(Execute(Input->PreExec, Env));
+	}
+	if (NewEnv == 0)
+		throw Error(Input, "Cannot access member of null");
+	Object *Result = NewEnv->Child[Input->Value];
+	if (Result == 0)
+		throw Error(Input, "Undefined member");
+	Env.This = NewEnv;
+	return Result;
 }
 
 static Object_Array *_3(Token *Input, Object_Env &Env) {
@@ -43,13 +36,8 @@ static Object_Array *_3(Token *Input, Object_Env &Env) {
 	Token *Iterator = Input->ChildBegin;
 	while (Iterator) {
 		try {
-			Object *Child = Execute(Iterator, Env);
-			if (Child) {
-				if (Child->Deletable == 0)
-					Child = Child->clone();
-				Child->Deletable = false;
-				Result->Value.push_back(Child);
-			}
+			Object *Temp = Execute(Iterator, Env);
+			Result->AddValue(Temp);
 		} catch (...) {
 			delete Result;
 			throw;
@@ -60,156 +48,164 @@ static Object_Array *_3(Token *Input, Object_Env &Env) {
 }
 
 static Object *_2(Token *Input, Object_Env &Env) {
-	Object *Callee = Execute(Input->PreExec, Env);
-	if (Callee == 0)
-		throw Error(Input, (char *)"Cannot call null");
-	Object_Array *Args = 0;
+	Object_Array *Args = _3(Input, Env);
+	Args->Deletable = false;
+
+	Object *Callee = 0;
 	try {
-		Args = _3(Input, Env);
+		Callee = Env.Register_AutoFree(Execute(Input->PreExec, Env));
 	} catch (...) {
-		if (Callee->Deletable)
-			delete Callee;
+		delete Args;
 		throw;
 	}
-	Args->Deletable = false;
+	if (Callee == 0) {
+		delete Args;
+		throw Error(Input, "Cannot call null");
+	}
 	try {
 		Object *Result = Callee->OnCall(*Args, Env);
 		delete Args;
-		if (Callee->Deletable) {
-			if (Result)
-				if (Result->Deletable == 0)
-					Result = Result->clone();
-			delete Callee;
-		}
 		return Result;
-	} catch (const char *s) {
+	} catch (const char *Msg) {
 		delete Args;
-		if (Callee->Deletable)
-			delete Callee;
-		throw Error(Input, s);
+		throw Error(Input, Msg);
 	} catch (...) {
 		delete Args;
-		if (Callee->Deletable)
-			delete Callee;
 		throw;
 	}
 }
 
 static Object *_4(Token *Input, Object_Env &Env) {
-	Object *Callee = Execute(Input->PreExec, Env);
-	if (Callee == 0)
-		throw Error(Input, (char *)"Cannot call null");
-	Object_Array *Args = 0;
+	Object_Array *Args = _3(Input, Env);
+	Args->Deletable = false;
+
+	Object *Callee = 0;
 	try {
-		Args = _3(Input, Env);
+		Callee = Env.Register_AutoFree(Execute(Input->PreExec, Env));
 	} catch (...) {
-		if (Callee->Deletable)
-			delete Callee;
+		delete Args;
 		throw;
 	}
-	Args->Deletable = false;
+	if (Callee == 0) {
+		delete Args;
+		throw Error(Input, "Cannot call null");
+	}
 	try {
 		Object *Result = Callee->OnIndex(*Args, Env);
 		delete Args;
-		if (Callee->Deletable) {
-			if (Result)
-				if (Result->Deletable == 0)
-					Result = Result->clone();
-			delete Callee;
-		}
 		return Result;
-	} catch (const char *s) {
+	} catch (const char *Msg) {
 		delete Args;
-		if (Callee->Deletable)
-			delete Callee;
-		throw Error(Input, s);
+		throw Error(Input, Msg);
 	} catch (...) {
 		delete Args;
-		if (Callee->Deletable)
-			delete Callee;
 		throw;
 	}
 }
 
 static Object *_6(Token *Input, Object_Env &Env) {
 	if (Input->Value.str[0] == ':') {
+		// Varible declaration
 		if (Input->ChildBegin == Input->ChildEnd)
-			throw Error(Input, (char *)"Missing variable name");
-		Env.AddChild(Input->ChildBegin->Value, Execute(Input->ChildEnd, Env));
+			throw Error(Input, "Missing varible name");
+		if (Input->ChildBegin->PreExec)
+			throw Error(Input, "Varible mustn't be child of other one");
+		Object *Result = Execute(Input->ChildEnd, Env);
+		Env.AddChild(Input->ChildBegin->Value, Result);
 		return 0;
 	}
 	if (Input->Value.str[0] == '=') {
+		// Assignment
+		if (Input->ChildBegin == Input->ChildEnd)
+			throw Error(Input, "Missing varible name");
 		Object *Assigner = Execute(Input->ChildBegin, Env);
 		if (Assigner == 0)
-			throw Error(Input, (char *)"Cannot assign to null");
+			throw Error(Input, "Cannot assign to null");
 		if (Assigner->Deletable) {
-			throw Assigner;
-			throw Error(Input, (char *)"Cannot assign to constant");
+			Env.Register_AutoFree(Assigner);
+			throw Error(Input, "Cannot assign to a intermediate object");
 		}
-		Object *Result = 0;
-		try {
-			Result = Execute(Input->ChildEnd, Env);
-			if (Result == 0)
-				throw Error(Input, (char *)"Cannot assign null");
-			Assigner->OnAssign(*Result, Env);
-		} catch (...) {
-			if (Result)
-				if (Result->Deletable)
-					delete Result;
-			throw;
-		}
+		Object *Assignee = Env.Register_AutoFree(Execute(Input->ChildEnd, Env));
+		if (Assignee == 0)
+			throw Error(Input, "Cannot assign null");
+		Assigner->OnAssign(*Assignee, Env);
 		return 0;
 	}
-	Object *Callee = Env.Shared->Child[Input->Value];
-	if (Callee == 0)
-		throw Error(Input, (char *)"Undefined operator");
+	// Other operator
 	Object_Array *Args = _3(Input, Env);
+	Object *Caller = Env.Shared->Child[Input->Value];
+	if (Caller == 0) {
+		delete Args;
+		throw Error(Input, "Operator not supported");
+	}
 	try {
-		Object *Result = Callee->OnCall(*Args, Env);
+		Object *Result = Caller->OnCall(*Args, Env);
 		delete Args;
 		return Result;
-	} catch (const char *e) {
+	} catch (const char *Msg) {
 		delete Args;
-		throw Error(Input, e);
+		throw Error(Input, Msg);
 	} catch (...) {
 		delete Args;
 		throw;
 	}
 }
 
+#include <string>
+
 static Object *_8_9(Token *Input, Object_Env &Env) {
-	std::string s(Input->Value.str, Input->Value.len);
-	if (Input->Type == 8) // int
-		return new Object_Int(std::stoll(s));
-	return new Object_Decimal(std::stold(s));
+	std::string Intermediate(Input->Value.str, Input->Value.len);
+	if (Input->Type == 8)
+		return new Object_Int(stoll(Intermediate));
+	return new Object_Decimal(stold(Intermediate));
 }
 
 static Object *_5(Token *Input, Object_Env &Env) {
-	return new Object_String(Input->Value);
+	char *Temp = new char[Input->Value.len];
+	int len = 0;
+	for (int i = 0; i < Input->Value.len; i++) {
+		if (Input->Value.str[i] == '\\') {
+			i++;
+			if (Input->Value.str[i] == 'n')
+				Temp[len++] = '\n';
+			else if (Input->Value.str[i] == 't')
+				Temp[len++] = '\t';
+			else if (Input->Value.str[i] == '\\')
+				Temp[len++] = '\\';
+			else if (Input->Value.str[i] == '"')
+				Temp[len++] = '\"';
+			else
+				Temp[len++] = Input->Value.str[i];
+		} else
+			Temp[len++] = Input->Value.str[i];
+	}
+	Object *Result = new Object_String(Str(Temp, len));
+	delete[] Temp;
+	return Result;
 }
 
 Object *Execute(Token *Input, Object_Env &Env) {
 	switch (Input->Type) {
 	case 0:
 		return _0(Input, Env);
-	case 7:
-		return _7(Input, Env);
 	case 10:
 		return _10(Input, Env);
+	case 7:
+		return _7(Input, Env);
 	case 3:
 		return _3(Input, Env);
 	case 2:
 		return _2(Input, Env);
-	case 6:
-		return _6(Input, Env);
 	case 4:
 		return _4(Input, Env);
+	case 5:
+		return _5(Input, Env);
 	case 8:
 	case 9:
 		return _8_9(Input, Env);
-	case 5:
-		return _5(Input, Env);
+	case 6:
+		return _6(Input, Env);
 	default:
-		throw Error(Input, (char *)"Unknown token");
+		throw Error(Input, "Unknown token");
 	}
 }
